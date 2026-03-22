@@ -1,0 +1,16 @@
+#ddev-generated
+services:
+  ollama:
+    container_name: ddev-${DDEV_SITENAME}-ollama
+    image: ollama/ollama:latest
+    restart: "no"
+    expose:
+      - "11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+
+volumes:
+  ollama-data:

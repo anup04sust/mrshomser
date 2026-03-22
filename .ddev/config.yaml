@@ -1,0 +1,30 @@
+name: mrshomser
+type: generic
+docroot: ""
+php_version: "8.4"
+webserver_type: nginx-fpm
+xdebug_enabled: false
+additional_hostnames: []
+additional_fqdns: []
+use_dns_when_possible: true
+composer_version: ""
+omit_containers:
+  - db
+web_environment:
+  - NODE_ENV=development
+nodejs_version: "20"
+corepack_enable: true
+
+hooks:
+  post-start:
+    - exec: CI=true pnpm install --frozen-lockfile
+    - exec: bash /var/www/html/.ddev/web-build/start-nextjs.sh
+
+router_http_port: "80"
+router_https_port: "443"
+
+web_extra_exposed_ports:
+  - name: nextjs
+    container_port: 3000
+    http_port: 3000
+    https_port: 3001

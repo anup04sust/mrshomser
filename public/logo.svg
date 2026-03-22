@@ -1,0 +1,126 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="bg" x1="80" y1="60" x2="430" y2="460" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#0F172A"/>
+            <stop offset="1" stop-color="#1E293B"/>
+        </linearGradient>
+
+        <linearGradient id="face" x1="180" y1="120" x2="330" y2="340" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#D8EEFF"/>
+            <stop offset="1" stop-color="#A7D8FF"/>
+        </linearGradient>
+
+        <linearGradient id="visor" x1="190" y1="185" x2="322" y2="245" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#22D3EE"/>
+            <stop offset="1" stop-color="#3B82F6"/>
+        </linearGradient>
+
+        <linearGradient id="neck" x1="220" y1="320" x2="290" y2="420" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#334155"/>
+            <stop offset="1" stop-color="#0F172A"/>
+        </linearGradient>
+
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="8" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.28"/>
+        </filter>
+    </defs>
+
+    <!-- Background -->
+    <rect width="512" height="512" rx="40" fill="url(#bg)"/>
+
+    <!-- Floating tech rings -->
+    <circle cx="256" cy="210" r="150" stroke="#38BDF8" stroke-opacity="0.10" stroke-width="2"/>
+    <circle cx="256" cy="210" r="128" stroke="#22D3EE" stroke-opacity="0.12" stroke-width="2" stroke-dasharray="10 12"/>
+    <circle cx="256" cy="210" r="104" stroke="#60A5FA" stroke-opacity="0.10" stroke-width="2"/>
+
+    <!-- Side signal nodes -->
+    <g filter="url(#glow)" opacity="0.95">
+        <circle cx="116" cy="176" r="6" fill="#22D3EE"/>
+        <circle cx="92" cy="208" r="4" fill="#38BDF8"/>
+        <circle cx="396" cy="154" r="5" fill="#38BDF8"/>
+        <circle cx="423" cy="192" r="7" fill="#22D3EE"/>
+    </g>
+
+    <!-- Antenna -->
+    <g filter="url(#shadow)">
+        <path d="M256 96V70" stroke="#94A3B8" stroke-width="8" stroke-linecap="round"/>
+        <circle cx="256" cy="56" r="14" fill="#22D3EE"/>
+        <circle cx="256" cy="56" r="24" stroke="#22D3EE" stroke-opacity="0.25" stroke-width="4"/>
+    </g>
+
+    <!-- Head shell -->
+    <g filter="url(#shadow)">
+        <path d="M256 108C186.412 108 130 164.412 130 234V242C130 311.588 186.412 368 256 368C325.588 368 382 311.588 382 242V234C382 164.412 325.588 108 256 108Z" fill="#E2E8F0"/>
+        <path d="M256 120C193.039 120 142 171.039 142 234V241C142 303.961 193.039 355 256 355C318.961 355 370 303.961 370 241V234C370 171.039 318.961 120 256 120Z" fill="url(#face)"/>
+    </g>
+
+    <!-- Ear modules -->
+    <g filter="url(#shadow)">
+        <rect x="106" y="208" width="30" height="58" rx="15" fill="#334155"/>
+        <rect x="376" y="208" width="30" height="58" rx="15" fill="#334155"/>
+        <circle cx="121" cy="237" r="7" fill="#22D3EE"/>
+        <circle cx="391" cy="237" r="7" fill="#22D3EE"/>
+    </g>
+
+    <!-- Visor -->
+    <g filter="url(#glow)">
+        <rect x="178" y="182" width="156" height="68" rx="30" fill="url(#visor)"/>
+        <rect x="184" y="188" width="144" height="56" rx="26" stroke="#BAE6FD" stroke-opacity="0.45" stroke-width="2"/>
+    </g>
+
+    <!-- Eyes -->
+    <g filter="url(#glow)">
+        <rect x="205" y="205" width="34" height="16" rx="8" fill="#ECFEFF"/>
+        <rect x="273" y="205" width="34" height="16" rx="8" fill="#ECFEFF"/>
+        <circle cx="231" cy="213" r="3" fill="#22D3EE"/>
+        <circle cx="281" cy="213" r="3" fill="#22D3EE"/>
+    </g>
+
+    <!-- Brow tech line -->
+    <path d="M196 177C220 166 292 166 316 177" stroke="#7DD3FC" stroke-opacity="0.6" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- Nose -->
+    <path d="M256 230V266" stroke="#7C9EC0" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="256" cy="270" r="4" fill="#7C9EC0"/>
+
+    <!-- Smile -->
+    <g filter="url(#glow)">
+        <path d="M222 292C234 306 278 306 290 292" stroke="#22D3EE" stroke-width="5" stroke-linecap="round"/>
+    </g>
+
+    <!-- Cheek lights -->
+    <circle cx="192" cy="274" r="5" fill="#22D3EE" fill-opacity="0.55"/>
+    <circle cx="320" cy="274" r="5" fill="#22D3EE" fill-opacity="0.55"/>
+
+    <!-- Chin panel -->
+    <path d="M224 318C238 328 274 328 288 318" stroke="#64748B" stroke-width="4" stroke-linecap="round"/>
+
+    <!-- Neck / collar -->
+    <g filter="url(#shadow)">
+        <path d="M212 348L194 420H318L300 348C286 357 273 362 256 362C239 362 226 357 212 348Z" fill="url(#neck)"/>
+        <path d="M212 348C225 357 239 362 256 362C273 362 287 357 300 348" stroke="#94A3B8" stroke-width="3" stroke-linecap="round"/>
+    </g>
+
+    <!-- Chest core -->
+    <g filter="url(#glow)">
+        <circle cx="256" cy="404" r="18" fill="#22D3EE" fill-opacity="0.95"/>
+        <circle cx="256" cy="404" r="30" stroke="#22D3EE" stroke-opacity="0.22" stroke-width="4"/>
+        <path d="M248 404H264M256 396V412" stroke="#E0F2FE" stroke-width="3" stroke-linecap="round"/>
+    </g>
+
+    <!-- Decorative circuit lines -->
+    <g stroke="#38BDF8" stroke-opacity="0.28" stroke-width="3" stroke-linecap="round">
+        <path d="M136 330L176 310"/>
+        <path d="M376 330L336 310"/>
+        <path d="M164 118L190 138"/>
+        <path d="M348 118L322 138"/>
+    </g>
+</svg>

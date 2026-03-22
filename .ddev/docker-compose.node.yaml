@@ -1,0 +1,7 @@
+services:
+  web:
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=development
+    working_dir: /var/www/html
