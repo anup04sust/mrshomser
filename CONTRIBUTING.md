@@ -1,6 +1,6 @@
-# Contributing to mrSomsher
+# Contributing to Mr Shomser
 
-Thank you for your interest in contributing to mrSomsher (সবজান্তা শমসের)! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Mr Shomser! This document provides guidelines and instructions for contributing.
 
 ## Table of Contents
 
@@ -405,7 +405,7 @@ Contributors are credited in:
 - CHANGELOG.md
 - GitHub contributors page
 
-Thank you for making mrSomsher better! 🎉
+Thank you for making Mr Shomser better! 🎉
 
 ---
 

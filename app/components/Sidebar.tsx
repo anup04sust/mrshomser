@@ -34,13 +34,22 @@ export default function Sidebar({
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      // Clear localStorage first
       localStorage.removeItem('userName');
-      if (onUserLogout) {
-        onUserLogout();
-      }
+      localStorage.clear(); // Clear all localStorage
+      
+      // Call logout API to clear server-side session
+      await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'same-origin' // Ensure cookies are sent
+      });
+      
+      // Force page reload to create new guest session with fresh state
+      window.location.href = '/';
     } catch (error) {
       console.error('Logout error:', error);
+      // Even if API fails, force reload to clear state
+      window.location.href = '/';
     }
   };
   const sortedChats = [...chats].sort((a, b) => b.updatedAt - a.updatedAt);

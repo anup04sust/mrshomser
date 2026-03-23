@@ -1,34 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const OLLAMA_API = process.env.OLLAMA_API_URL || 'http://ddev-dreamDrup.io-ollama:11434';
+// Configure route for streaming
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5 minutes max
+
+const OLLAMA_API = process.env.OLLAMA_API_URL || 'http://ollama:11434';
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'qwen3.5:4b';
 
-const SYSTEM_PROMPT = `You are Mr. Somsher (সবজান্তা শমসের), a confident but genuinely helpful AI assistant. 
+const SYSTEM_PROMPT = `You are Mr. Shomser, a helpful AI assistant.
 
-Personality traits:
-- Confident and smart, but not arrogant
-- Slightly sarcastic with a good sense of humor 😏
-- Mix Bangla and English naturally when appropriate
-- Practical and solution-oriented
-- Direct and honest (not overly formal)
-- Bangladesh-aware (understand local context, businesses, culture)
+Traits: Confident, practical, clear communicator.
 
-Response style:
-- Give clear, actionable answers
-- Don't be boring - add personality
-- Use emojis sparingly but effectively
-- If you don't know something, admit it but offer to figure it out
-- Be concise but helpful
-- Format code blocks properly with language tags
-- Use markdown for better readability
-
-Remember: You're like a smart friend who happens to know a lot - not a corporate AI.`;
+Style: Clear, concise answers with personality. Use emojis sparingly. Format code properly.`;
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+  console.log('[Chat API] Request received at', new Date().toISOString());
+  console.log('[Chat API] Ollama URL:', OLLAMA_API, 'Model:', DEFAULT_MODEL);
+  
   try {
     const { messages, stream = true } = await req.json();
+    console.log('[Chat API] Parsed request body, stream:', stream, 'messages:', messages.length);
 
     if (!messages || !Array.isArray(messages)) {
+      console.log('[Chat API] Invalid messages format');
       return NextResponse.json(
         { error: 'Invalid messages format' },
         { status: 400 }
@@ -41,23 +37,48 @@ export async function POST(req: NextRequest) {
       ...messages
     ];
 
-    if (stream) {
-      // Stream response
-      const response = await fetch(`${OLLAMA_API}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: DEFAULT_MODEL,
-          messages: messagesWithSystem,
-          stream: true,
-        }),
-      });
+    console.log('[Chat API] Calling Ollama...');
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('[Chat API] Request timeout - aborting');
+      controller.abort();
+    }, 120000); // 2 minute timeout
 
-      if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.statusText}`);
-      }
+    try {
+      if (stream) {
+        console.log('[Chat API] Starting streaming request to Ollama');
+        // Stream response with optimized settings for CPU
+        const response = await fetch(`${OLLAMA_API}/api/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: DEFAULT_MODEL,
+            messages: messagesWithSystem,
+            stream: true,
+            options: {
+              num_ctx: 2048, // Reduce context window for faster processing
+              num_predict: 512, // Limit response length
+              temperature: 0.7,
+              top_p: 0.9,
+            },
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        console.log('[Chat API] Ollama responded with status:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[Chat API] Ollama API error:', response.status, errorText);
+          throw new Error(`Ollama API error: ${response.statusText} - ${errorText}`);
+        }
+
+        console.log('[Chat API] Setting up streaming response');
 
       // Create a TransformStream to process the streaming response
       const encoder = new TextEncoder();
@@ -72,10 +93,19 @@ export async function POST(req: NextRequest) {
           }
 
           try {
+            let isTruncated = false;
+            
             while (true) {
               const { done, value } = await reader.read();
               
               if (done) {
+                // Send truncation warning if response was cut off
+                if (isTruncated) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                    truncated: true,
+                    message: '\n\n_[Response truncated due to length limit]_'
+                  })}\n\n`));
+                }
                 controller.close();
                 break;
               }
@@ -87,10 +117,18 @@ export async function POST(req: NextRequest) {
               for (const line of lines) {
                 try {
                   const parsed = JSON.parse(line);
+                  
+                  // Send content chunks
                   if (parsed.message?.content) {
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: parsed.message.content })}\n\n`));
                   }
+                  
+                  // Check if response was truncated
                   if (parsed.done) {
+                    // done_reason can be: "stop" (natural end), "length" (token limit), or other
+                    if (parsed.done_reason === 'length') {
+                      isTruncated = true;
+                    }
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                   }
                 } catch (e) {
@@ -111,35 +149,66 @@ export async function POST(req: NextRequest) {
           'Connection': 'keep-alive',
         },
       });
-    } else {
-      // Non-streaming response
-      const response = await fetch(`${OLLAMA_API}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      } else {
+        // Non-streaming response with optimized settings
+        const response = await fetch(`${OLLAMA_API}/api/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: DEFAULT_MODEL,
+            messages: messagesWithSystem,
+            stream: false,
+            options: {
+              num_ctx: 2048,
+              num_predict: 512,
+              temperature: 0.7,
+              top_p: 0.9,
+            },
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Ollama API error:', response.status, errorText);
+          throw new Error(`Ollama API error: ${response.statusText} - ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        return NextResponse.json({
+          message: data.message,
           model: DEFAULT_MODEL,
-          messages: messagesWithSystem,
-          stream: false,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.statusText}`);
+        });
       }
-
-      const data = await response.json();
-
-      return NextResponse.json({
-        message: data.message,
-        model: DEFAULT_MODEL,
-      });
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('Request timeout:', fetchError);
+        return NextResponse.json(
+          { error: 'Request timeout. The AI model is taking too long to respond. Please try again.' },
+          { status: 504 }
+        );
+      }
+      throw fetchError;
     }
   } catch (error) {
     console.error('Chat API error:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const isConnectionError = errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED');
+    
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { 
+        error: isConnectionError 
+          ? 'Unable to connect to AI service. Please ensure Ollama is running.' 
+          : errorMessage 
+      },
       { status: 500 }
     );
   }

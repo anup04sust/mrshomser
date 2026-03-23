@@ -1,6 +1,6 @@
-# mrSomsher Documentation
+# Mr Shomser Documentation
 
-Complete documentation for mrSomsher (সবজান্তা শমসের) - A self-hosted AI assistant.
+Complete documentation for Mr Shomser - A self-hosted AI assistant.
 
 ## Table of Contents
 
@@ -74,7 +74,7 @@ MONGODB_URI=mongodb://db:db@mongo:27017/mrshomser?authSource=admin
 MONGODB_DB=mrshomser
 
 # App Configuration
-NEXT_PUBLIC_APP_NAME=mrSomsher
+NEXT_PUBLIC_APP_NAME=Mr Shomser
 
 # JWT Secret (CHANGE THIS IN PRODUCTION!)
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production-123456
@@ -403,7 +403,7 @@ Deletes a chat session.
 - **Guest mode** - Try without registration
 
 #### AI Personality
-- **Bangla + English** - Bilingual support
+- **English** - English support
 - **Context-aware** - Bangladesh-specific knowledge
 - **Confident tone** - Helpful but not boring
 - **Practical focus** - Real-world solutions

@@ -6,6 +6,43 @@ import { v4 as uuidv4 } from 'uuid';
 import { Message, Chat } from '../types/chat';
 import Sidebar from './Sidebar';
 import MarkdownMessage from './MarkdownMessage';
+import OffcanvasMenu from './OffcanvasMenu';
+
+// Helper function to detect incomplete responses
+function isResponseIncomplete(content: string): boolean {
+  if (!content || content.trim().length === 0) return false;
+  
+  // Check for unclosed code blocks
+  const codeBlockMatches = content.match(/```/g);
+  if (codeBlockMatches && codeBlockMatches.length % 2 !== 0) {
+    return true;
+  }
+  
+  // Check if ends with incomplete sentence indicators
+  const trimmed = content.trim();
+  const lastChar = trimmed[trimmed.length - 1];
+  
+  // If ends with mid-word indicators or incomplete punctuation
+  if ([',', ':', ';', '-', '(', '[', '{'].includes(lastChar)) {
+    return true;
+  }
+  
+  // Check if last line appears incomplete (e.g., "# Create a")
+  const lines = content.split('\n');
+  const lastLine = lines[lines.length - 1].trim();
+  
+  // If last line is very short and doesn't end with punctuation (for code/comments)
+  if (lastLine.length > 0 && lastLine.length < 50) {
+    const endsWithPunctuation = /[.!?;}\])>\"`']$/.test(lastLine);
+    const startsWithCodeComment = /^(#|\/\/|<!--)/.test(lastLine);
+    
+    if (startsWithCodeComment && !endsWithPunctuation) {
+      return true;
+    }
+  }
+  
+  return false;
+}
 
 export default function ChatInterface() {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -15,7 +52,9 @@ export default function ChatInterface() {
   const [isFetching, setIsFetching] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [userName, setUserName] = useState<string>('');
+  const [truncatedMessages, setTruncatedMessages] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -57,6 +96,18 @@ export default function ChatInterface() {
     
     loadChats().finally(() => clearTimeout(timeout));
   }, []);
+
+  const handleUserLogout = async () => {
+    // Clear user state
+    setUserName('');
+    
+    // Clear all chats and current chat
+    setChats([]);
+    setCurrentChatId(null);
+    
+    // Reload chats which will create a new guest session
+    await loadChats();
+  };
 
   const loadChats = async () => {
     try {
@@ -152,9 +203,12 @@ export default function ChatInterface() {
       });
 
       if (response.ok) {
+        // Don't update state from server - keep local state as source of truth during conversation
+        // Only update if we need to sync specific fields
         const data = await response.json();
+        // Optionally update only non-message fields like title
         setChats(prev => prev.map(chat => 
-          chat.id === chatId ? data.chat : chat
+          chat.id === chatId ? { ...chat, title: data.chat.title, updatedAt: data.chat.updatedAt } : chat
         ));
       }
     } catch (error) {
@@ -279,10 +333,34 @@ export default function ChatInterface() {
               
               try {
                 const parsed = JSON.parse(data);
+                
+                // Handle content chunks
                 if (parsed.content) {
                   accumulatedContent += parsed.content;
                   
                   // Update message in real-time
+                  setChats(prev => prev.map(chat =>
+                    chat.id === chatId
+                      ? {
+                          ...chat,
+                          messages: chat.messages.map(msg =>
+                            msg.id === assistantMessage.id
+                              ? { ...msg, content: accumulatedContent }
+                              : msg
+                          ),
+                        }
+                      : chat
+                  ));
+                }
+                
+                // Handle truncation warning
+                if (parsed.truncated && parsed.message) {
+                  accumulatedContent += parsed.message;
+                  
+                  // Mark this message as truncated
+                  setTruncatedMessages(prev => new Set(prev).add(assistantMessage.id));
+                  
+                  // Update with truncation warning
                   setChats(prev => prev.map(chat =>
                     chat.id === chatId
                       ? {
@@ -304,17 +382,42 @@ export default function ChatInterface() {
         }
       }
 
+      // Check if response appears incomplete (client-side detection)
+      if (accumulatedContent && isResponseIncomplete(accumulatedContent)) {
+        setTruncatedMessages(prev => new Set(prev).add(assistantMessage.id));
+      }
+
       // Save to database after streaming completes
-      const finalChat = chats.find(c => c.id === chatId);
-      if (finalChat && chatId) {
-        await updateChat(chatId, {
-          messages: finalChat.messages.map(msg =>
+      if (chatId && accumulatedContent) {
+        // Update local state one final time to ensure we have the complete message
+        setChats(prev => prev.map(chat =>
+          chat.id === chatId
+            ? {
+                ...chat,
+                messages: chat.messages.map(msg =>
+                  msg.id === assistantMessage.id
+                    ? { ...msg, content: accumulatedContent }
+                    : msg
+                ),
+                updatedAt: Date.now(),
+              }
+            : chat
+        ));
+
+        // Save to database (this won't replace local state anymore)
+        const chatToUpdate = chats.find(c => c.id === chatId);
+        if (chatToUpdate) {
+          const finalMessages = chatToUpdate.messages.map(msg =>
             msg.id === assistantMessage.id
               ? { ...msg, content: accumulatedContent }
               : msg
-          ),
-          title: finalChat.messages.length === 1 ? generateTitle(userMessage.content) : finalChat.title,
-        });
+          );
+          
+          await updateChat(chatId, {
+            messages: finalMessages,
+            title: chatToUpdate.messages.length === 2 ? generateTitle(userMessage.content) : chatToUpdate.title,
+          });
+        }
       }
     } catch (error: any) {
       if (error.name !== 'AbortError') {
@@ -327,7 +430,7 @@ export default function ChatInterface() {
                 ...chat,
                 messages: chat.messages.map(msg =>
                   msg.id === assistantMessage.id
-                    ? { ...msg, content: 'Sorry, something went wrong. আবার চেষ্টা করুন! 😅' }
+                    ? { ...msg, content: 'Sorry, something went wrong. Please try again! 😅' }
                     : msg
                 ),
               }
@@ -351,20 +454,211 @@ export default function ChatInterface() {
     navigator.clipboard.writeText(content);
   };
 
+  const continueResponse = async () => {
+    if (isLoading || !currentChatId) return;
+    
+    const continuationMessage = 'Please continue from where you left off.';
+    const userMessage: Message = {
+      id: uuidv4(),
+      role: 'user',
+      content: continuationMessage,
+      timestamp: Date.now(),
+    };
+
+    // Optimistically update UI
+    const currentChatData = chats.find(c => c.id === currentChatId);
+    const updatedMessages = [...(currentChatData?.messages || []), userMessage];
+    
+    setChats(prev => prev.map(chat =>
+      chat.id === currentChatId
+        ? {
+            ...chat,
+            messages: updatedMessages,
+            updatedAt: Date.now(),
+          }
+        : chat
+    ));
+
+    setIsLoading(true);
+
+    // Create assistant message placeholder
+    const assistantMessage: Message = {
+      id: uuidv4(),
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+    };
+
+    setChats(prev => prev.map(chat =>
+      chat.id === currentChatId
+        ? {
+            ...chat,
+            messages: [...chat.messages, assistantMessage],
+            updatedAt: Date.now(),
+          }
+        : chat
+    ));
+
+    try {
+      abortControllerRef.current = new AbortController();
+      
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages.map(m => ({
+            role: m.role,
+            content: m.content,
+          })),
+          stream: true,
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedContent = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') break;
+              
+              try {
+                const parsed = JSON.parse(data);
+                
+                // Handle content chunks
+                if (parsed.content) {
+                  accumulatedContent += parsed.content;
+                  
+                  // Update message in real-time
+                  setChats(prev => prev.map(chat =>
+                    chat.id === currentChatId
+                      ? {
+                          ...chat,
+                          messages: chat.messages.map(msg =>
+                            msg.id === assistantMessage.id
+                              ? { ...msg, content: accumulatedContent }
+                              : msg
+                          ),
+                        }
+                      : chat
+                  ));
+                }
+                
+                // Handle truncation warning
+                if (parsed.truncated && parsed.message) {
+                  accumulatedContent += parsed.message;
+                  
+                  // Mark this message as truncated
+                  setTruncatedMessages(prev => new Set(prev).add(assistantMessage.id));
+                  
+                  // Update with truncation warning
+                  setChats(prev => prev.map(chat =>
+                    chat.id === currentChatId
+                      ? {
+                          ...chat,
+                          messages: chat.messages.map(msg =>
+                            msg.id === assistantMessage.id
+                              ? { ...msg, content: accumulatedContent }
+                              : msg
+                          ),
+                        }
+                      : chat
+                  ));
+                }
+              } catch (e) {
+                // Skip invalid JSON
+              }
+            }
+          }
+        }
+      }
+
+      // Check if response appears incomplete (client-side detection)
+      if (accumulatedContent && isResponseIncomplete(accumulatedContent)) {
+        setTruncatedMessages(prev => new Set(prev).add(assistantMessage.id));
+      }
+
+      // Save to database after streaming completes
+      if (currentChatId && accumulatedContent) {
+        setChats(prev => prev.map(chat =>
+          chat.id === currentChatId
+            ? {
+                ...chat,
+                messages: chat.messages.map(msg =>
+                  msg.id === assistantMessage.id
+                    ? { ...msg, content: accumulatedContent }
+                    : msg
+                ),
+                updatedAt: Date.now(),
+              }
+            : chat
+        ));
+
+        const chatToUpdate = chats.find(c => c.id === currentChatId);
+        if (chatToUpdate) {
+          const finalMessages = chatToUpdate.messages.map(msg =>
+            msg.id === assistantMessage.id
+              ? { ...msg, content: accumulatedContent }
+              : msg
+          );
+          
+          await updateChat(currentChatId, {
+            messages: finalMessages,
+          });
+        }
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error continuing response:', error);
+        
+        setChats(prev => prev.map(chat =>
+          chat.id === currentChatId
+            ? {
+                ...chat,
+                messages: chat.messages.map(msg =>
+                  msg.id === assistantMessage.id
+                    ? { ...msg, content: 'Sorry, something went wrong. Please try again! 😅' }
+                    : msg
+                ),
+              }
+            : chat
+        ));
+      }
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
   if (isFetching) {
     return (
       <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900">
         <div className="flex flex-col items-center gap-6 px-6 max-w-2xl">
           <Image
             src="/logo.svg"
-            alt="mrSomsher"
+            alt="Mr Shomser"
             width={80}
             height={80}
             className="animate-pulse"
           />
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              mrSomsher (সবজান্তা শমসের)
+              Mr Shomser
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
               Your smartest (slightly overconfident) AI friend
@@ -438,7 +732,7 @@ export default function ChatInterface() {
                 Privacy-first
               </span>
               <span className="flex items-center gap-1">
-                🇧🇩 Bangladesh-aware
+                � Context-aware
               </span>
             </div>
           </div>
@@ -480,7 +774,7 @@ export default function ChatInterface() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         userName={userName}
         onUserLogin={(name) => setUserName(name)}
-        onUserLogout={() => setUserName('')}
+        onUserLogout={handleUserLogout}
       />
 
       {/* Main chat area */}
@@ -499,27 +793,36 @@ export default function ChatInterface() {
               </button>
               <Image
                 src="/logo.svg"
-                alt="mrSomsher"
+                alt="mrshomser"
                 width={32}
                 height={32}
                 className="w-8 h-8"
               />
               <div>
-                <h1 className="font-semibold text-gray-900 dark:text-white">mrSomsher</h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">সবজান্তা শমসের - Your AI Companion</p>
+                <h1 className="font-semibold text-gray-900 dark:text-white">mrshomser</h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Your AI Companion</p>
               </div>
             </div>
-            {currentChat && (
-              <button
-                onClick={createNewChat}
-                className="hidden md:flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            <button
+              onClick={() => setMenuOpen(true)}
+              className="flex items-center justify-center w-10 h-10 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 active:scale-95 group"
+              aria-label="Open menu"
+              title="Open menu"
+            >
+              <svg
+                className="w-5 h-5 transition-all duration-300 group-hover:scale-110"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                New
-              </button>
-            )}
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -529,16 +832,16 @@ export default function ChatInterface() {
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
               <Image
                 src="/logo.svg"
-                alt="mrSomsher"
+                alt="mrshomser"
                 width={80}
                 height={80}
                 className="mb-6 opacity-80"
               />
               <h2 className="text-2xl font-semibold mb-2 text-gray-900 dark:text-white">
-                কী জানতে চান?
+                What can I help you with?
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mb-2">
-                Ask me anything in Bangla or English. I'm here to help with practical solutions!
+                Ask me anything. I&apos;m here to help with practical solutions!
               </p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-8">
                 🍪 Your chats are saved in this browser session for 30 days
@@ -546,9 +849,9 @@ export default function ChatInterface() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
                 {[
                   { icon: '💡', text: 'What can you help me with?', query: 'What can you help me with?' },
-                  { icon: '🌐', text: 'Website তৈরি করতে চাই', query: 'কীভাবে একটা ওয়েবসাইট বানাবো?' },
+                  { icon: '🌐', text: 'Create a website', query: 'How do I create a website?' },
                   { icon: '💻', text: 'Programming advice', query: 'Best programming languages to learn in 2026?' },
-                  { icon: '📚', text: 'Learning resources', query: 'ঢাকায় ভালো কোডিং কোর্স কোথায় পাবো?' },
+                  { icon: '📚', text: 'Learning resources', query: 'Where can I find good online courses for programming?' },
                 ].map((example, i) => (
                   <button
                     key={i}
@@ -572,7 +875,7 @@ export default function ChatInterface() {
                     <div className="flex-shrink-0">
                       <Image
                         src="/chat-bubble.svg"
-                        alt="Mr Somsher"
+                        alt="Mr Shomser"
                         width={32}
                         height={32}
                         className="w-8 h-8"
@@ -593,16 +896,31 @@ export default function ChatInterface() {
                         <>
                           <MarkdownMessage content={message.content} />
                           {message.content && (
-                            <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => copyMessage(message.content)}
-                                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                                title="Copy message"
-                              >
-                                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
-                              </button>
+                            <div className="mt-3 flex items-center gap-2">
+                              {truncatedMessages.has(message.id) && (
+                                <button
+                                  onClick={continueResponse}
+                                  disabled={isLoading}
+                                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 dark:from-blue-500 dark:to-blue-600 dark:hover:from-blue-600 dark:hover:to-blue-700 rounded-lg shadow-sm hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                  title="Continue the response"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7-7 7" />
+                                  </svg>
+                                  Continue Response
+                                </button>
+                              )}
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => copyMessage(message.content)}
+                                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                                  title="Copy message"
+                                >
+                                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                           )}
                         </>
@@ -629,7 +947,7 @@ export default function ChatInterface() {
                   <div className="flex-shrink-0">
                     <Image
                       src="/chat-bubble.svg"
-                      alt="Mr Somsher"
+                      alt="Mr Shomser"
                       width={32}
                       height={32}
                       className="w-8 h-8"
@@ -660,7 +978,7 @@ export default function ChatInterface() {
                     sendMessage(e);
                   }
                 }}
-                placeholder="Message mrSomsher... (Bangla or English)"
+                placeholder="Message Mr Shomser..."
                 className="w-full px-4 py-3 pr-24 rounded-xl border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none"
                 rows={1}
                 style={{ minHeight: '52px', maxHeight: '200px' }}
@@ -697,6 +1015,9 @@ export default function ChatInterface() {
           </div>
         </div>
       </div>
+      
+      {/* Offcanvas menu */}
+      <OffcanvasMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
     </div>
   );
 }

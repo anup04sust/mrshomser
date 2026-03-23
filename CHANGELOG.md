@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to mrSomsher will be documented in this file.
+All notable changes to Mr Shomser will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced .gitignore** - Better coverage of DDEV, IDE, and temp files
 
 ### Changed
-- Header tagline - Now shows "সবজান্তা শমসের - Your AI Companion" instead of username
+- Header tagline - Now shows "Your AI Companion" instead of username
 - Sidebar - Dynamic login/logout button based on auth state
 - Authentication flow - Now uses API instead of localStorage only
 - MongoDB schema - Added users collection
@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Chat Interface** - Real-time streaming responses
 - **Multi-chat Support** - Multiple conversation threads
 - **Markdown Support** - Code blocks, formatting, syntax highlighting
-- **Bilingual Support** - Bangla + English mixed responses
+- **English Support** - English mixed responses
 - **DDEV Setup** - Complete development environment
 - **Sidebar** - Chat history and navigation
 - **Guest Mode** - Try without registration

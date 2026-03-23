@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "mrSomsher - সবজান্তা শমসের",
+  title: "Mr Shomser - AI Assistant",
   description: "A playful yet powerful AI assistant that feels like your smartest (and slightly overconfident) friend.",
   icons: {
     icon: '/logo.svg',

@@ -119,8 +119,8 @@ export default function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <h2 className="text-2xl font-bold">Welcome to mrSomsher</h2>
-          <p className="text-purple-100 text-sm mt-1">সবজান্তা শমসের - Your AI Companion</p>
+          <h2 className="text-2xl font-bold">Welcome to Mr Shomser</h2>
+          <p className="text-purple-100 text-sm mt-1">Your AI Companion</p>
         </div>
 
         {/* Tab Navigation */}

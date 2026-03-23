@@ -1,6 +1,6 @@
 import { Chat, ChatState } from '../types/chat';
 
-const STORAGE_KEY = 'mrsomsher_chats';
+const STORAGE_KEY = 'mrshomser_chats';
 
 export const chatStorage = {
   // Load all chats from localStorage

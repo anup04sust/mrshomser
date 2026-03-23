@@ -1,6 +1,6 @@
 # Installation Guide
 
-Complete installation guide for mrSomsher (সবজান্তা শমসের).
+Complete installation guide for Mr Shomser.
 
 ## Table of Contents
 
@@ -127,7 +127,7 @@ MONGODB_URI=mongodb://db:db@mongo:27017/mrshomser?authSource=admin
 MONGODB_DB=mrshomser
 
 # App Configuration
-NEXT_PUBLIC_APP_NAME=mrSomsher
+NEXT_PUBLIC_APP_NAME=Mr Shomser
 
 # JWT Secret - CHANGE THIS!
 JWT_SECRET=generate-a-random-secret-key-here
@@ -375,7 +375,7 @@ ddev exec "chown -R $(id -u):$(id -g) /var/www/html"
 
 ## Uninstallation
 
-To completely remove mrSomsher:
+To completely remove Mr Shomser:
 
 ```bash
 # Stop and remove containers

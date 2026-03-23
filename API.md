@@ -1,6 +1,6 @@
 # API Quick Reference
 
-Quick reference guide for mrSomsher API endpoints.
+Quick reference guide for Mr Shomser API endpoints.
 
 ## Base URL
 
