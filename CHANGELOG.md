@@ -16,6 +16,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] - 2026-03-23
+
+### 🎉 Major Release - Production Ready
+
+This release marks the first stable version of Mr Shomser with comprehensive features, documentation, and optimizations.
+
+### Added
+- **DevDoc Page** - Comprehensive developer documentation at `/devdoc` with tech stack, API reference, setup guide
+- **About Page** - Project information and mission at `/about`
+- **Contact Page** - Developer contact information at `/contact`
+- **Privacy Policy** - Privacy policy page at `/privacy`
+- **Terms & Conditions** - Terms of service at `/terms`
+- **OffcanvasMenu Component** - Right sidebar navigation menu with DevDoc, About, Contact, Privacy, Terms
+- **Environment Template** - `.env.example` file for easier project setup
+- **Test Scripts** - Chat testing scripts for development and debugging
+- **Documentation Files** - `BANGLA_REMOVAL_SUMMARY.md`, `LOGOUT_FIX.md`, complete troubleshooting guides
+
+### Changed
+- **Branding Update** - Consistent "Mr Shomser" branding throughout (was: mrSomsher/Somsher)
+- **AI Model** - Switched to `phi3:mini` (2.3GB, English-optimized) from `qwen3.5:4b`
+- **Language Support** - Removed all Bengali/Bangla content, now English-only for better quality
+- **README Overhaul** - Complete rewrite with comprehensive DDEV setup, troubleshooting, features
+- **Menu Structure** - Replaced "Home" with "DevDoc" in right sidebar menu
+- **System Prompt** - Updated to English-only confident assistant personality
+- **Documentation** - Updated all docs (API.md, DOCUMENTATION.md, INSTALL.md, CONTRIBUTING.md)
+- **Logout Flow** - Enhanced to clear both cookies, localStorage, and force page reload
+
+### Fixed
+- **Logout Bug** - Now properly clears session cookies and chat history
+- **Cookie Management** - Explicit `maxAge=0` for proper cookie deletion
+- **Session Persistence** - Guest sessions properly isolated with 30-day expiry
+- **Branding Consistency** - Fixed all instances of incorrect brand name
+
+### Improved
+- **Performance** - Optimized for phi3:mini (10-15s response times on CPU)
+- **Developer Experience** - Complete DDEV setup guide with all commands
+- **Error Handling** - Better error messages and troubleshooting documentation
+- **Code Quality** - Consistent TypeScript types, proper linting
+
+### Removed
+- All Bengali/Bangla text from UI components
+- Bilingual placeholders and system prompts
+- Bangladesh-specific references
+- Unnecessary language switching features
+
+### Documentation
+- 📖 Complete README with project overview, setup, troubleshooting
+- 💻 DevDoc page with technical reference
+- 🔌 API documentation with endpoint details
+- 📚 Installation guide with DDEV workflow
+- 🐛 Troubleshooting guide for common issues
+
+### Technical Highlights
+- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes, Ollama (phi3:mini), MongoDB
+- **Development**: DDEV, Docker, pnpm
+- **Features**: Streaming AI chat, multi-chat support, JWT auth, guest sessions
+- **Performance**: 2.3GB model, 512 token limit, SSE streaming
+
+---
+
 ## [0.2.0] - 2026-03-23
 
 ### Added
