@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/app/lib/mongodb';
 import { getCurrentActor, getOwnerQuery } from '@/app/lib/session';
 import { Chat } from '@/app/types/chat';
+import { updateChatRequestSchema } from '@/app/lib/schemas';
 
 // GET /api/chats/[id] - Get a specific chat
 export async function GET(
@@ -42,16 +43,29 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const actor = await getCurrentActor(req);
     const ownerQuery = getOwnerQuery(actor);
-    const updates = await req.json();
+    
+    // Validate request body
+    const body = await req.json();
+    const validationResult = updateChatRequestSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+      return NextResponse.json(
+        { error: errors },
+        { status: 400 }
+      );
+    }
+    
+    const updates = validationResult.data;
     
     const db = await getDatabase();
     const result = await db.collection('chats').updateOne(
       { id, ...ownerQuery },
       {
         $set: {
-          ...updates,
           updatedAt: Date.now(),
         },
       }
@@ -84,14 +98,14 @@ export async function DELETE(
 ) {
   try {
     const actor = await getCurrentActor(req);
+    const { id } = await params;
+    const actor = await getCurrentActor(req);
     const ownerQuery = getOwnerQuery(actor);
     
     const db = await getDatabase();
     const result = await db.collection('chats').deleteOne({
       id,
       ...ownerQuery
-      sessionId,
-    });
 
     if (result.deletedCount === 0) {
       return NextResponse.json(

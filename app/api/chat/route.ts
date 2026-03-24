@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/app/lib/config';
+import { sendMessageRequestSchema } from '@/app/lib/schemas';
 
 // Configure route for streaming
 export const runtime = 'nodejs';
@@ -18,13 +19,25 @@ export async function POST(req: NextRequest) {
   console.log('[Chat API] Ollama URL:', config.ollama.apiUrl, 'Model:', config.ollama.model);
   
   try {
-    const { messages, stream = true } = await req.json();
-    console.log('[Chat API] Parsed request body, stream:', stream, 'messages:', messages.length);
+    const body = await req.json();
+    const { messages, stream = true } = body;
+    console.log('[Chat API] Parsed request body, stream:', stream, 'messages:', messages?.length);
 
+    // Basic validation for messages array
     if (!messages || !Array.isArray(messages)) {
       console.log('[Chat API] Invalid messages format');
       return NextResponse.json(
-        { error: 'Invalid messages format' },
+        { error: 'Invalid messages format - must be an array' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate each message has required fields
+    const invalidMessage = messages.find(m => !m.role || !m.content);
+    if (invalidMessage) {
+      console.log('[Chat API] Invalid message structure');
+      return NextResponse.json(
+        { error: 'Each message must have role and content' },
         { status: 400 }
       );
     }

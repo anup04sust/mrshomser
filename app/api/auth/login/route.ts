@@ -4,17 +4,23 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from '@/app/lib/config';
 import { migrateGuestChatsToUser } from '@/app/lib/session';
+import { loginRequestSchema } from '@/app/lib/schemas';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
-
-    if (!email || !password) {
+    // Validate request body
+    const body = await req.json();
+    const validationResult = loginRequestSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: errors },
         { status: 400 }
       );
     }
+    
+    const { email, password } = validationResult.data;
 
     const db = await getDatabase();
     const usersCollection = db.collection('users');
@@ -41,7 +47,7 @@ export async function POST(req: NextRequest) {
     const token = jwt.sign(
       { userId: user._id.toString(), email: user.email, name: user.name },
       config.jwt.secret,
-      { expiresIn: '30d' as string }
+      { expiresIn: '30d' }
     );
 
     // Migrate guest chats to this user if a guest session exists

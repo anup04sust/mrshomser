@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/app/lib/mongodb';
 import { getCurrentActor, getOwnerQuery, getSessionCookieHeader } from '@/app/lib/session';
 import { Chat } from '@/app/types/chat';
+import { createChatRequestSchema } from '@/app/lib/schemas';
 
 // GET /api/chats - List all chats for current user/session
 export async function GET(req: NextRequest) {
@@ -27,8 +28,32 @@ export async function GET(req: NextRequest) {
     return response;
   } catch (error) {
     console.error('Error fetching chats:', error);
-    returnactor = await getCurrentActor(req);
-    const { title = 'New Chat', messages = [] } = await req.json();
+    return NextResponse.json(
+      { error: 'Failed to fetch chats' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/chats - Create a new chat
+export async function POST(req: NextRequest) {
+  try {
+    const actor = await getCurrentActor(req);
+    
+    // Validate request body
+    const body = await req.json();
+    const validationResult = createChatRequestSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+      return NextResponse.json(
+        { error: errors },
+        { status: 400 }
+      );
+    }
+    
+    const { title = 'New Chat', message } = validationResult.data;
+    const messages: any[] = [];
     
     const db = await getDatabase();
     const now = Date.now();
@@ -59,19 +84,8 @@ export async function GET(req: NextRequest) {
       response.headers.append('Set-Cookie', cookieHeader);
     }
     
-    return responseandom().toString(36).substr(2, 9)}`,
-      sessionId,
-      title,
-      messages,
-      createdAt: now,
-      updatedAt: now,user/session
-export async function DELETE(req: NextRequest) {
-  try {
-    const actor = await getCurrentActor(req);
-    const ownerQuery = getOwnerQuery(actor);
-    
-    const db = await getDatabase();
-    await db.collection('chats').deleteMany(ownerQuery
+    return response;
+  } catch (error) {
     console.error('Error creating chat:', error);
     return NextResponse.json(
       { error: 'Failed to create chat' },
@@ -80,13 +94,14 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
-// DELETE /api/chats - Delete all chats for current session
+// DELETE /api/chats - Delete all chats for current user/session
 export async function DELETE(req: NextRequest) {
   try {
-    const sessionId = await getOrCreateSession();
-    const db = await getDatabase();
+    const actor = await getCurrentActor(req);
+    const ownerQuery = getOwnerQuery(actor);
     
-    await db.collection('chats').deleteMany({ sessionId });
+    const db = await getDatabase();
+    await db.collection('chats').deleteMany(ownerQuery);
 
     return NextResponse.json({ success: true });
   } catch (error) {
