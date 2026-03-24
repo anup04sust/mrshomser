@@ -3,6 +3,7 @@ import { getDatabase } from '@/app/lib/mongodb';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from '@/app/lib/config';
+import { migrateGuestChatsToUser } from '@/app/lib/session';
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,8 +41,20 @@ export async function POST(req: NextRequest) {
     const token = jwt.sign(
       { userId: user._id.toString(), email: user.email, name: user.name },
       config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn }
+      { expiresIn: '30d' as string }
     );
+
+    // Migrate guest chats to this user if a guest session exists
+    const guestSession = req.cookies.get('mrshomser_session')?.value;
+    let migratedCount = 0;
+    if (guestSession) {
+      try {
+        migratedCount = await migrateGuestChatsToUser(db, guestSession, user._id.toString());
+      } catch (migrationError) {
+        console.warn('Failed to migrate guest chats:', migrationError);
+        // Don't fail login if migration fails
+      }
+    }
 
     // Set cookie
     const response = NextResponse.json({
@@ -51,6 +64,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         name: user.name,
       },
+      migratedChats: migratedCount,
     });
 
     response.cookies.set('auth_token', token, {

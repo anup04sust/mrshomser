@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/app/lib/mongodb';
-import { getOrCreateSession } from '@/app/lib/session';
+import { getCurrentActor, getOwnerQuery } from '@/app/lib/session';
 import { Chat } from '@/app/types/chat';
 
 // GET /api/chats/[id] - Get a specific chat
@@ -10,12 +10,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const sessionId = await getOrCreateSession();
-    const db = await getDatabase();
+    const actor = await getCurrentActor(req);
+    const ownerQuery = getOwnerQuery(actor);
     
+    const db = await getDatabase();
     const chat = await db.collection<Chat>('chats').findOne({
       id,
-      sessionId,
+      ...ownerQuery,
     });
 
     if (!chat) {
@@ -41,13 +42,13 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const sessionId = await getOrCreateSession();
+    const actor = await getCurrentActor(req);
+    const ownerQuery = getOwnerQuery(actor);
     const updates = await req.json();
+    
     const db = await getDatabase();
-
     const result = await db.collection('chats').updateOne(
-      { id, sessionId },
+      { id, ...ownerQuery },
       {
         $set: {
           ...updates,
@@ -63,6 +64,7 @@ export async function PUT(
       );
     }
 
+    const chat = await db.collection<Chat>('chats').findOne({ id, ...ownerQuery
     const chat = await db.collection<Chat>('chats').findOne({ id, sessionId });
 
     return NextResponse.json({ chat });
@@ -81,12 +83,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const sessionId = await getOrCreateSession();
+    const actor = await getCurrentActor(req);
+    const ownerQuery = getOwnerQuery(actor);
+    
     const db = await getDatabase();
-
     const result = await db.collection('chats').deleteOne({
       id,
+      ...ownerQuery
       sessionId,
     });
 
