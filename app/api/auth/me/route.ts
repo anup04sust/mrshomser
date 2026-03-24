@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+import { config } from '@/app/lib/config';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,7 +11,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, config.jwt.secret) as {
       userId: string;
       email: string;
       name: string;

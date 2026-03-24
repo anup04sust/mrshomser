@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/app/lib/mongodb';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from '@/app/lib/config';
 import { migrateGuestChatsToUser } from '@/app/lib/session';
 import { registerRequestSchema, ValidationError } from '@/app/lib/schemas';
 import { createRouteLogger } from '@/app/lib/logger';
+import { userRepository } from '@/app/lib/repositories';
 
 export async function POST(req: NextRequest) {
   const log = createRouteLogger(req);
@@ -25,11 +25,8 @@ export async function POST(req: NextRequest) {
     
     const { email, password, name } = validationResult.data;
 
-    const db = await getDatabase();
-    const usersCollection = db.collection('users');
-
     // Check if user already exists
-    const existingUser = await usersCollection.findOne({ email: email.toLowerCase() });
+    const existingUser = await userRepository.existsByEmail(email);
     if (existingUser) {
       return NextResponse.json(
         { error: 'User with this email already exists' },
@@ -41,19 +38,17 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
-    const newUser = {
-      email: email.toLowerCase(),
+    const newUser = await userRepository.create({
+      email,
       name,
       password: hashedPassword,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    };
-
-    const result = await usersCollection.insertOne(newUser);
+    });
 
     // Create JWT token
     const token = jwt.sign(
-      { userId: result.insertedId.toString(), email: newUser.email, name: newUser.name },
+      { userId: newUser._id.toString(), email: newUser.email, name: newUser.name },
       config.jwt.secret,
       { expiresIn: '30d' }
     );
@@ -63,7 +58,7 @@ export async function POST(req: NextRequest) {
     let migratedCount = 0;
     if (guestSession) {
       try {
-        migratedCount = await migrateGuestChatsToUser(db, guestSession, result.insertedId.toString());
+        migratedCount = await migrateGuestChatsToUser(guestSession, newUser._id.toString());
       } catch (migrationError) {
         log.warn('Failed to migrate guest chats', { sessionId: guestSession, error: migrationError });
         // Don't fail registration if migration fails
@@ -74,7 +69,7 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       success: true,
       user: {
-        id: result.insertedId.toString(),
+        id: newUser._id.toString(),
         email: newUser.email,
         name: newUser.name,
       },

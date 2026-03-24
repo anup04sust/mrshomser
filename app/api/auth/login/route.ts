@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/app/lib/mongodb';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from '@/app/lib/config';
 import { migrateGuestChatsToUser } from '@/app/lib/session';
 import { loginRequestSchema } from '@/app/lib/schemas';
 import { createRouteLogger } from '@/app/lib/logger';
+import { userRepository } from '@/app/lib/repositories';
 
 export async function POST(req: NextRequest) {
   const log = createRouteLogger(req);
@@ -25,11 +25,8 @@ export async function POST(req: NextRequest) {
     
     const { email, password } = validationResult.data;
 
-    const db = await getDatabase();
-    const usersCollection = db.collection('users');
-
     // Find user
-    const user = await usersCollection.findOne({ email: email.toLowerCase() });
+    const user = await userRepository.findByEmail(email);
     if (!user) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
@@ -58,7 +55,7 @@ export async function POST(req: NextRequest) {
     let migratedCount = 0;
     if (guestSession) {
       try {
-        migratedCount = await migrateGuestChatsToUser(db, guestSession, user._id.toString());
+        migratedCount = await migrateGuestChatsToUser(guestSession, user._id.toString());
       } catch (migrationError) {
         log.warn('Failed to migrate guest chats', { sessionId: guestSession, userId: user._id.toString(), error: migrationError });
         // Don't fail login if migration fails

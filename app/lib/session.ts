@@ -108,22 +108,11 @@ export function getSessionCookieHeader(actor: Actor): string | null {
  * Call this after successful login/registration
  */
 export async function migrateGuestChatsToUser(
-  db: any,
   guestSessionId: string,
   userId: string
 ): Promise<number> {
-  const chatsCollection = db.collection('chats');
-  
-  const result = await chatsCollection.updateMany(
-    { sessionId: guestSessionId },
-    {
-      $set: { userId, migratedAt: new Date() },
-      $unset: { sessionId: '' },
-    }
-  );
-  
-  console.log(`Migrated ${result.modifiedCount} chats from guest session to user ${userId}`);
-  return result.modifiedCount;
+  const { chatRepository } = await import('./repositories');
+  return await chatRepository.migrateOwnership(guestSessionId, userId);
 }
 
 // Legacy compatibility functions (will be deprecated)

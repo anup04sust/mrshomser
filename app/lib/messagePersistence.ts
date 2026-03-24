@@ -5,9 +5,9 @@
  * Implements debounced updates to avoid overwhelming the database.
  */
 
-import { getDatabase } from './mongodb';
 import type { Message, MessageStatus } from './schemas';
 import { logger } from './logger';
+import { chatRepository } from './repositories';
 
 interface MessageUpdate {
   chatId: string;
@@ -23,25 +23,16 @@ interface MessageUpdate {
  */
 export async function updateMessage(update: MessageUpdate): Promise<void> {
   try {
-    const db = await getDatabase();
-    
-    const updateDoc: Record<string, any> = {
-      'messages.$.content': update.content,
-      'messages.$.status': update.status,
-      updatedAt: Date.now(),
+    const updates: Partial<Message> = {
+      content: update.content,
+      status: update.status,
     };
     
     if (update.error) {
-      updateDoc['messages.$.error'] = update.error;
+      updates.error = update.error;
     }
     
-    await db.collection('chats').updateOne(
-      { 
-        id: update.chatId,
-        'messages.id': update.messageId,
-      },
-      { $set: updateDoc as any }
-    );
+    await chatRepository.updateMessage(update.chatId, update.messageId, updates);
   } catch (error) {
     logger.error('Failed to update message', { chatId: update.chatId, messageId: update.messageId, error });
     // Don't throw - streaming should continue even if persistence fails
@@ -54,15 +45,7 @@ export async function updateMessage(update: MessageUpdate): Promise<void> {
  */
 export async function addMessage(chatId: string, message: Message): Promise<void> {
   try {
-    const db = await getDatabase();
-    
-    await db.collection('chats').updateOne(
-      { id: chatId },
-      { 
-        $push: { messages: message as any },
-        $set: { updatedAt: Date.now() }
-      }
-    );
+    await chatRepository.addMessage(chatId, message);
   } catch (error) {
     logger.error('Failed to add message', { chatId, messageId: message.id, error });
     throw error; // This should fail the request
@@ -147,20 +130,7 @@ export async function markMessageFailed(
  */
 export async function getIncompleteMessages(chatId: string): Promise<Message[]> {
   try {
-    const db = await getDatabase();
-    
-    const chat = await db.collection('chats').findOne(
-      { id: chatId },
-      { projection: { messages: 1 } }
-    );
-    
-    if (!chat || !chat.messages) {
-      return [];
-    }
-    
-    return chat.messages.filter((msg: Message) => 
-      msg.status === 'streaming' || msg.status === 'pending'
-    );
+    return await chatRepository.getIncompleteMessages(chatId);
   } catch (error) {
     logger.error('Failed to get incomplete messages', { chatId, error });
     return [];

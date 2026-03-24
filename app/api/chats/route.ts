@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/app/lib/mongodb';
-import { getCurrentActor, getOwnerQuery, getSessionCookieHeader } from '@/app/lib/session';
-import { Chat } from '@/app/types/chat';
+import { getCurrentActor, getSessionCookieHeader } from '@/app/lib/session';
 import { createChatRequestSchema } from '@/app/lib/schemas';
 import { createRouteLogger } from '@/app/lib/logger';
+import { chatRepository, type ChatFilters } from '@/app/lib/repositories';
 
 // GET /api/chats - List all chats for current user/session
 export async function GET(req: NextRequest) {
@@ -11,14 +10,12 @@ export async function GET(req: NextRequest) {
   
   try {
     const actor = await getCurrentActor(req);
-    const ownerQuery = getOwnerQuery(actor);
     
-    const db = await getDatabase();
-    const chats = await db
-      .collection<Chat>('chats')
-      .find(ownerQuery)
-      .sort({ updatedAt: -1 })
-      .toArray();
+    const filters: ChatFilters = actor.type === 'user'
+      ? { userId: actor.userId }
+      : { sessionId: actor.sessionId };
+    
+    const chats = await chatRepository.findAll(filters);
 
     const response = NextResponse.json({ chats });
     
@@ -58,28 +55,25 @@ export async function POST(req: NextRequest) {
     }
     
     const { title = 'New Chat', message } = validationResult.data;
-    const messages: any[] = [];
-    
-    const db = await getDatabase();
     const now = Date.now();
     
     // Create chat with either userId or sessionId depending on actor type
-    const chat: any = {
+    const chatData: any = {
       id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       title,
-      messages,
+      messages: [],
       createdAt: now,
       updatedAt: now,
     };
     
     // Add owner field (userId for authenticated, sessionId for guest)
     if (actor.type === 'user') {
-      chat.userId = actor.userId;
+      chatData.userId = actor.userId;
     } else {
-      chat.sessionId = actor.sessionId;
+      chatData.sessionId = actor.sessionId;
     }
 
-    await db.collection('chats').insertOne(chat);
+    const chat = await chatRepository.create(chatData);
 
     const response = NextResponse.json({ chat });
     
@@ -108,10 +102,12 @@ export async function DELETE(req: NextRequest) {
     const ownerQuery = getOwnerQuery(actor);
     
     const db = await getDatabase();
-    await db.collection('chats').deleteMany(ownerQuery);
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
+    
+    const filters: ChatFilters = actor.type === 'user'
+      ? { userId: actor.userId }
+      : { sessionId: actor.sessionId };
+    
+    await chatRepository.deleteAll(filters
     log.error('Error deleting chats', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { error: 'Failed to delete chats' },

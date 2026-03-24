@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/app/lib/mongodb';
-import { getCurrentActor, getOwnerQuery } from '@/app/lib/session';
-import { Chat } from '@/app/types/chat';
+import { getCurrentActor } from '@/app/lib/session';
 import { updateChatRequestSchema } from '@/app/lib/schemas';
 import { createRouteLogger } from '@/app/lib/logger';
+import { chatRepository, type ChatFilters } from '@/app/lib/repositories';
 
 // GET /api/chats/[id] - Get a specific chat
 export async function GET(
@@ -15,13 +14,12 @@ export async function GET(
   try {
     const { id } = await params;
     const actor = await getCurrentActor(req);
-    const ownerQuery = getOwnerQuery(actor);
     
-    const db = await getDatabase();
-    const chat = await db.collection<Chat>('chats').findOne({
-      id,
-      ...ownerQuery,
-    });
+    const filters: ChatFilters = actor.type === 'user'
+      ? { userId: actor.userId }
+      : { sessionId: actor.sessionId };
+    
+    const chat = await chatRepository.findById(id, filters);
 
     if (!chat) {
       return NextResponse.json(
@@ -50,7 +48,6 @@ export async function PUT(
   try {
     const { id } = await params;
     const actor = await getCurrentActor(req);
-    const ownerQuery = getOwnerQuery(actor);
     
     // Validate request body
     const body = await req.json();
@@ -64,26 +61,23 @@ export async function PUT(
       );
     }
     
-    const updates = validationResult.data;
+    const updates = {
+      ...validationResult.data,
+      updatedAt: Date.now(),
+    };
     
-    const db = await getDatabase();
-    const result = await db.collection('chats').updateOne(
-      { id, ...ownerQuery },
-      {
-        $set: {
-          updatedAt: Date.now(),
-        },
-      }
-    );
+    const filters: ChatFilters = actor.type === 'user'
+      ? { userId: actor.userId }
+      : { sessionId: actor.sessionId };
+    
+    const chat = await chatRepository.update(id, updates, filters);
 
-    if (result.matchedCount === 0) {
+    if (!chat) {
       return NextResponse.json(
         { error: 'Chat not found' },
         { status: 404 }
       );
     }
-
-    const chat = await db.collection<Chat>('chats').findOne({ id, ...ownerQuery });
 
     return NextResponse.json({ chat });
   } catch (error) {
@@ -109,15 +103,14 @@ export async function DELETE(
     
     const db = await getDatabase();
     const result = await db.collection('chats').deleteOne({
-      id,
-      ...ownerQuery,
-    });
+    
+    const filters: ChatFilters = actor.type === 'user'
+      ? { userId: actor.userId }
+      : { sessionId: actor.sessionId };
+    
+    const deleted = await chatRepository.deleteById(id, filters);
 
-    if (result.deletedCount === 0) {
-      return NextResponse.json(
-        { error: 'Chat not found' },
-        { status: 404 }
-      );
+    if (!deleted
     }
 
     return NextResponse.json({ success: true });
