@@ -2,19 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/app/lib/mongodb';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+import { config } from '@/app/lib/config';
+import { migrateGuestChatsToUser } from '@/app/lib/session';
+import { loginRequestSchema } from '@/app/lib/schemas';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
-
-    if (!email || !password) {
+    // Validate request body
+    const body = await req.json();
+    const validationResult = loginRequestSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: errors },
         { status: 400 }
       );
     }
+    
+    const { email, password } = validationResult.data;
 
     const db = await getDatabase();
     const usersCollection = db.collection('users');
@@ -40,9 +46,21 @@ export async function POST(req: NextRequest) {
     // Create JWT token
     const token = jwt.sign(
       { userId: user._id.toString(), email: user.email, name: user.name },
-      JWT_SECRET,
+      config.jwt.secret,
       { expiresIn: '30d' }
     );
+
+    // Migrate guest chats to this user if a guest session exists
+    const guestSession = req.cookies.get('mrshomser_session')?.value;
+    let migratedCount = 0;
+    if (guestSession) {
+      try {
+        migratedCount = await migrateGuestChatsToUser(db, guestSession, user._id.toString());
+      } catch (migrationError) {
+        console.warn('Failed to migrate guest chats:', migrationError);
+        // Don't fail login if migration fails
+      }
+    }
 
     // Set cookie
     const response = NextResponse.json({
@@ -52,11 +70,12 @@ export async function POST(req: NextRequest) {
         email: user.email,
         name: user.name,
       },
+      migratedChats: migratedCount,
     });
 
     response.cookies.set('auth_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: config.app.isProduction,
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60, // 30 days
       path: '/',

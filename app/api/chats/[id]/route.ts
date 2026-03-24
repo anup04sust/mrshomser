@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/app/lib/mongodb';
-import { getOrCreateSession } from '@/app/lib/session';
+import { getCurrentActor, getOwnerQuery } from '@/app/lib/session';
 import { Chat } from '@/app/types/chat';
+import { updateChatRequestSchema } from '@/app/lib/schemas';
 
 // GET /api/chats/[id] - Get a specific chat
 export async function GET(
@@ -10,12 +11,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const sessionId = await getOrCreateSession();
-    const db = await getDatabase();
+    const actor = await getCurrentActor(req);
+    const ownerQuery = getOwnerQuery(actor);
     
+    const db = await getDatabase();
     const chat = await db.collection<Chat>('chats').findOne({
       id,
-      sessionId,
+      ...ownerQuery,
     });
 
     if (!chat) {
@@ -42,15 +44,28 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const sessionId = await getOrCreateSession();
-    const updates = await req.json();
+    const actor = await getCurrentActor(req);
+    const ownerQuery = getOwnerQuery(actor);
+    
+    // Validate request body
+    const body = await req.json();
+    const validationResult = updateChatRequestSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
+      return NextResponse.json(
+        { error: errors },
+        { status: 400 }
+      );
+    }
+    
+    const updates = validationResult.data;
+    
     const db = await getDatabase();
-
     const result = await db.collection('chats').updateOne(
-      { id, sessionId },
+      { id, ...ownerQuery },
       {
         $set: {
-          ...updates,
           updatedAt: Date.now(),
         },
       }
@@ -63,7 +78,7 @@ export async function PUT(
       );
     }
 
-    const chat = await db.collection<Chat>('chats').findOne({ id, sessionId });
+    const chat = await db.collection<Chat>('chats').findOne({ id, ...ownerQuery });
 
     return NextResponse.json({ chat });
   } catch (error) {
@@ -82,12 +97,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const sessionId = await getOrCreateSession();
+    const actor = await getCurrentActor(req);
+    const ownerQuery = getOwnerQuery(actor);
+    
     const db = await getDatabase();
-
     const result = await db.collection('chats').deleteOne({
       id,
-      sessionId,
+      ...ownerQuery,
     });
 
     if (result.deletedCount === 0) {

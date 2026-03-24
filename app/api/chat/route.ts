@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { config } from '@/app/lib/config';
+import { sendMessageRequestSchema } from '@/app/lib/schemas';
 
 // Configure route for streaming
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes max
-
-const OLLAMA_API = process.env.OLLAMA_API_URL || 'http://ollama:11434';
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'qwen3.5:4b';
 
 const SYSTEM_PROMPT = `You are Mr. Shomser, a helpful AI assistant.
 
@@ -17,16 +16,28 @@ Style: Clear, concise answers with personality. Use emojis sparingly. Format cod
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   console.log('[Chat API] Request received at', new Date().toISOString());
-  console.log('[Chat API] Ollama URL:', OLLAMA_API, 'Model:', DEFAULT_MODEL);
+  console.log('[Chat API] Ollama URL:', config.ollama.apiUrl, 'Model:', config.ollama.model);
   
   try {
-    const { messages, stream = true } = await req.json();
-    console.log('[Chat API] Parsed request body, stream:', stream, 'messages:', messages.length);
+    const body = await req.json();
+    const { messages, stream = true } = body;
+    console.log('[Chat API] Parsed request body, stream:', stream, 'messages:', messages?.length);
 
+    // Basic validation for messages array
     if (!messages || !Array.isArray(messages)) {
       console.log('[Chat API] Invalid messages format');
       return NextResponse.json(
-        { error: 'Invalid messages format' },
+        { error: 'Invalid messages format - must be an array' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate each message has required fields
+    const invalidMessage = messages.find(m => !m.role || !m.content);
+    if (invalidMessage) {
+      console.log('[Chat API] Invalid message structure');
+      return NextResponse.json(
+        { error: 'Each message must have role and content' },
         { status: 400 }
       );
     }
@@ -50,13 +61,13 @@ export async function POST(req: NextRequest) {
       if (stream) {
         console.log('[Chat API] Starting streaming request to Ollama');
         // Stream response with optimized settings for CPU
-        const response = await fetch(`${OLLAMA_API}/api/chat`, {
+        const response = await fetch(`${config.ollama.apiUrl}/api/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: DEFAULT_MODEL,
+            model: config.ollama.model,
             messages: messagesWithSystem,
             stream: true,
             options: {
@@ -151,13 +162,13 @@ export async function POST(req: NextRequest) {
       });
       } else {
         // Non-streaming response with optimized settings
-        const response = await fetch(`${OLLAMA_API}/api/chat`, {
+        const response = await fetch(`${config.ollama.apiUrl}/api/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: DEFAULT_MODEL,
+            model: config.ollama.model,
             messages: messagesWithSystem,
             stream: false,
             options: {
@@ -182,7 +193,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
           message: data.message,
-          model: DEFAULT_MODEL,
+          model: config.ollama.model,
         });
       }
     } catch (fetchError: any) {
