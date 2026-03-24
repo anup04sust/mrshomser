@@ -82,6 +82,13 @@ export const messageRoleSchema = z.enum(['user', 'assistant', 'system']);
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
 /**
+ * Message status enum (for streaming persistence)
+ */
+export const messageStatusSchema = z.enum(['pending', 'streaming', 'complete', 'failed']);
+
+export type MessageStatus = z.infer<typeof messageStatusSchema>;
+
+/**
  * Chat message
  */
 export const messageSchema = z.object({
@@ -89,6 +96,8 @@ export const messageSchema = z.object({
   role: messageRoleSchema,
   content: z.string(),
   timestamp: z.number(),
+  status: messageStatusSchema.optional().default('complete'),
+  error: z.string().optional(), // Error message if status is 'failed'
 });
 
 export type Message = z.infer<typeof messageSchema>;
@@ -150,6 +159,10 @@ export const sendMessageRequestSchema = z.object({
     .max(10000, 'Message must be less than 10,000 characters'),
   chatId: z.string().optional(),
   model: z.string().optional(),
+  messages: z.array(z.object({
+    role: z.string(),
+    content: z.string(),
+  })).optional(), // For backward compatibility with direct message array
 });
 
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;

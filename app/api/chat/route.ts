@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { config } from '@/app/lib/config';
 import { sendMessageRequestSchema } from '@/app/lib/schemas';
+import { addMessage, DebouncedMessageUpdater } from '@/app/lib/messagePersistence';
+import { randomUUID } from 'crypto';
 
 // Configure route for streaming
 export const runtime = 'nodejs';
@@ -20,8 +22,8 @@ export async function POST(req: NextRequest) {
   
   try {
     const body = await req.json();
-    const { messages, stream = true } = body;
-    console.log('[Chat API] Parsed request body, stream:', stream, 'messages:', messages?.length);
+    const { messages, stream = true, chatId } = body;
+    console.log('[Chat API] Parsed request body, stream:', stream, 'messages:', messages?.length, 'chatId:', chatId);
 
     // Basic validation for messages array
     if (!messages || !Array.isArray(messages)) {
@@ -91,9 +93,34 @@ export async function POST(req: NextRequest) {
 
         console.log('[Chat API] Setting up streaming response');
 
+        // If chatId provided, create assistant message placeholder for persistence
+        let assistantMessageId: string | null = null;
+        if (chatId) {
+          try {
+            assistantMessageId = randomUUID();
+            await addMessage(chatId, {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: '',
+              timestamp: Date.now(),
+              status: 'streaming',
+            });
+            console.log('[Chat API] Created streaming message:', assistantMessageId);
+          } catch (error) {
+            console.error('[Chat API] Failed to create message placeholder:', error);
+            // Continue without persistence if chat creation fails
+            assistantMessageId = null;
+          }
+        }
+
       // Create a TransformStream to process the streaming response
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
+      
+      // Initialize debounced updater for message persistence
+      const messageUpdater = chatId && assistantMessageId 
+        ? new DebouncedMessageUpdater(500) // Update every 500ms during streaming
+        : null;
 
       const stream = new ReadableStream({
         async start(controller) {
@@ -103,6 +130,8 @@ export async function POST(req: NextRequest) {
             return;
           }
 
+          let accumulatedContent = '';
+          
           try {
             let isTruncated = false;
             
@@ -110,6 +139,19 @@ export async function POST(req: NextRequest) {
               const { done, value } = await reader.read();
               
               if (done) {
+                // Final flush of accumulated content
+                if (messageUpdater && assistantMessageId) {
+                  await messageUpdater.flush();
+                  // Mark as complete
+                  await messageUpdater.update({
+                    chatId: chatId!,
+                    messageId: assistantMessageId,
+                    content: accumulatedContent,
+                    status: 'complete',
+                  });
+                  await messageUpdater.flush();
+                }
+                
                 // Send truncation warning if response was cut off
                 if (isTruncated) {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
@@ -131,7 +173,20 @@ export async function POST(req: NextRequest) {
                   
                   // Send content chunks
                   if (parsed.message?.content) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: parsed.message.content })}\n\n`));
+                    const content = parsed.message.content;
+                    accumulatedContent += content;
+                    
+                    // Persist to database (debounced)
+                    if (messageUpdater && assistantMessageId) {
+                      messageUpdater.update({
+                        chatId: chatId!,
+                        messageId: assistantMessageId,
+                        content: accumulatedContent,
+                        status: 'streaming',
+                      });
+                    }
+                    
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
                   }
                   
                   // Check if response was truncated
@@ -148,6 +203,18 @@ export async function POST(req: NextRequest) {
               }
             }
           } catch (error) {
+            // Mark message as failed if persistence is enabled
+            if (messageUpdater && assistantMessageId && chatId) {
+              messageUpdater.cancel();
+              await messageUpdater.update({
+                chatId,
+                messageId: assistantMessageId,
+                content: accumulatedContent || '[Error: Stream interrupted]',
+                status: 'failed',
+                error: error instanceof Error ? error.message : 'Stream error',
+              });
+              await messageUpdater.flush();
+            }
             controller.error(error);
           }
         },
