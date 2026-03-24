@@ -172,8 +172,29 @@ export default function ChatInterface() {
   };
 
   const selectChat = (chatId: string) => {
+    console.log('selectChat called with chatId:', chatId);
+    console.log('Current chatId:', currentChatId);
+    
+    if (chatId === currentChatId) {
+      console.log('Already on this chat, just closing sidebar');
+      setSidebarOpen(false);
+      return;
+    }
+    
+    console.log('Switching to chat:', chatId);
+    const chat = chats.find(c => c.id === chatId);
+    console.log('Found chat:', chat?.title, 'with', chat?.messages?.length, 'messages');
+    
     setCurrentChatId(chatId);
     setSidebarOpen(false);
+    
+    // Scroll to top when switching chats
+    setTimeout(() => {
+      const messagesContainer = document.querySelector('.overflow-y-auto');
+      if (messagesContainer) {
+        messagesContainer.scrollTop = 0;
+      }
+    }, 100);
   };
 
   const deleteChat = async (chatId: string) => {
