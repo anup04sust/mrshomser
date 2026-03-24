@@ -99,15 +99,15 @@ export async function DELETE(req: NextRequest) {
   
   try {
     const actor = await getCurrentActor(req);
-    const ownerQuery = getOwnerQuery(actor);
-    
-    const db = await getDatabase();
     
     const filters: ChatFilters = actor.type === 'user'
       ? { userId: actor.userId }
       : { sessionId: actor.sessionId };
     
-    await chatRepository.deleteAll(filters
+    await chatRepository.deleteAll(filters);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
     log.error('Error deleting chats', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { error: 'Failed to delete chats' },
