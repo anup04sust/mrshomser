@@ -156,7 +156,8 @@ export class ChatRepository {
   async addMessage(chatId: string, message: Message): Promise<void> {
     const db = await this.getDb();
     
-    // @ts-expect-error - MongoDB types don't handle nested document arrays well
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore - MongoDB types don't handle nested document arrays well
     await db.collection('chats').updateOne(
       { id: chatId },
       {
