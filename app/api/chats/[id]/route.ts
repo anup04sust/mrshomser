@@ -78,8 +78,7 @@ export async function PUT(
       );
     }
 
-    const chat = await db.collection<Chat>('chats').findOne({ id, ...ownerQuery
-    const chat = await db.collection<Chat>('chats').findOne({ id, sessionId });
+    const chat = await db.collection<Chat>('chats').findOne({ id, ...ownerQuery });
 
     return NextResponse.json({ chat });
   } catch (error) {
@@ -97,7 +96,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const actor = await getCurrentActor(req);
     const { id } = await params;
     const actor = await getCurrentActor(req);
     const ownerQuery = getOwnerQuery(actor);
@@ -105,7 +103,8 @@ export async function DELETE(
     const db = await getDatabase();
     const result = await db.collection('chats').deleteOne({
       id,
-      ...ownerQuery
+      ...ownerQuery,
+    });
 
     if (result.deletedCount === 0) {
       return NextResponse.json(
