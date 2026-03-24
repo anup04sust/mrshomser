@@ -48,6 +48,10 @@ next-env.d.ts
 
 # DDEV
 /.ddev/.ddev-docker-compose-*.yaml
+
+# Test scripts
+test-*.sh
+upload-*.sh
 /.ddev/.gitignore
 /.ddev/commands/web/.gitignore
 /.ddev/commands/host/.gitignore
