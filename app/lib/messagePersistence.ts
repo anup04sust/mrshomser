@@ -7,6 +7,7 @@
 
 import { getDatabase } from './mongodb';
 import type { Message, MessageStatus } from './schemas';
+import { logger } from './logger';
 
 interface MessageUpdate {
   chatId: string;
@@ -42,7 +43,7 @@ export async function updateMessage(update: MessageUpdate): Promise<void> {
       { $set: updateDoc as any }
     );
   } catch (error) {
-    console.error('[MessagePersistence] Failed to update message:', error);
+    logger.error('Failed to update message', { chatId: update.chatId, messageId: update.messageId, error });
     // Don't throw - streaming should continue even if persistence fails
   }
 }
@@ -63,7 +64,7 @@ export async function addMessage(chatId: string, message: Message): Promise<void
       }
     );
   } catch (error) {
-    console.error('[MessagePersistence] Failed to add message:', error);
+    logger.error('Failed to add message', { chatId, messageId: message.id, error });
     throw error; // This should fail the request
   }
 }
@@ -161,7 +162,7 @@ export async function getIncompleteMessages(chatId: string): Promise<Message[]> 
       msg.status === 'streaming' || msg.status === 'pending'
     );
   } catch (error) {
-    console.error('[MessagePersistence] Failed to get incomplete messages:', error);
+    logger.error('Failed to get incomplete messages', { chatId, error });
     return [];
   }
 }

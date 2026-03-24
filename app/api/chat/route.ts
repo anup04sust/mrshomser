@@ -3,6 +3,7 @@ import { config } from '@/app/lib/config';
 import { sendMessageRequestSchema } from '@/app/lib/schemas';
 import { addMessage, DebouncedMessageUpdater } from '@/app/lib/messagePersistence';
 import { randomUUID } from 'crypto';
+import { createRouteLogger } from '@/app/lib/logger';
 
 // Configure route for streaming
 export const runtime = 'nodejs';
@@ -17,17 +18,21 @@ Style: Clear, concise answers with personality. Use emojis sparingly. Format cod
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
-  console.log('[Chat API] Request received at', new Date().toISOString());
-  console.log('[Chat API] Ollama URL:', config.ollama.apiUrl, 'Model:', config.ollama.model);
+  const log = createRouteLogger(req);
+  
+  log.info('Chat API request received', {
+    ollamaUrl: config.ollama.apiUrl,
+    model: config.ollama.model,
+  });
   
   try {
     const body = await req.json();
     const { messages, stream = true, chatId } = body;
-    console.log('[Chat API] Parsed request body, stream:', stream, 'messages:', messages?.length, 'chatId:', chatId);
+    log.debug('Request body parsed', { stream, messageCount: messages?.length, chatId });
 
     // Basic validation for messages array
     if (!messages || !Array.isArray(messages)) {
-      console.log('[Chat API] Invalid messages format');
+      log.warn('Invalid messages format - not an array');
       return NextResponse.json(
         { error: 'Invalid messages format - must be an array' },
         { status: 400 }
@@ -37,7 +42,7 @@ export async function POST(req: NextRequest) {
     // Validate each message has required fields
     const invalidMessage = messages.find(m => !m.role || !m.content);
     if (invalidMessage) {
-      console.log('[Chat API] Invalid message structure');
+      log.warn('Invalid message structure - missing role or content');
       return NextResponse.json(
         { error: 'Each message must have role and content' },
         { status: 400 }
@@ -50,18 +55,18 @@ export async function POST(req: NextRequest) {
       ...messages
     ];
 
-    console.log('[Chat API] Calling Ollama...');
+    log.ai('Calling Ollama API', { messageCount: messagesWithSystem.length, stream });
     
     // Create abort controller for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.log('[Chat API] Request timeout - aborting');
+      log.warn('Ollama request timeout - aborting');
       controller.abort();
     }, 120000); // 2 minute timeout
 
     try {
       if (stream) {
-        console.log('[Chat API] Starting streaming request to Ollama');
+        log.debug('Starting streaming request to Ollama');
         // Stream response with optimized settings for CPU
         const response = await fetch(`${config.ollama.apiUrl}/api/chat`, {
           method: 'POST',
@@ -83,15 +88,15 @@ export async function POST(req: NextRequest) {
         });
 
         clearTimeout(timeoutId);
-        console.log('[Chat API] Ollama responded with status:', response.status);
+        log.ai('Ollama responded', { status: response.status });
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('[Chat API] Ollama API error:', response.status, errorText);
+          log.error('Ollama API error', { status: response.status, error: errorText });
           throw new Error(`Ollama API error: ${response.statusText} - ${errorText}`);
         }
 
-        console.log('[Chat API] Setting up streaming response');
+        log.debug('Setting up streaming response');
 
         // If chatId provided, create assistant message placeholder for persistence
         let assistantMessageId: string | null = null;
@@ -105,9 +110,12 @@ export async function POST(req: NextRequest) {
               timestamp: Date.now(),
               status: 'streaming',
             });
-            console.log('[Chat API] Created streaming message:', assistantMessageId);
+            log.debug('Created streaming message placeholder', { 
+              chatId, 
+              messageId: assistantMessageId 
+            });
           } catch (error) {
-            console.error('[Chat API] Failed to create message placeholder:', error);
+            log.error('Failed to create message placeholder', { chatId, error });
             // Continue without persistence if chat creation fails
             assistantMessageId = null;
           }
@@ -252,7 +260,7 @@ export async function POST(req: NextRequest) {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('Ollama API error:', response.status, errorText);
+          log.error('Ollama API error (non-streaming)', { status: response.status, error: errorText });
           throw new Error(`Ollama API error: ${response.statusText} - ${errorText}`);
         }
 
@@ -267,7 +275,7 @@ export async function POST(req: NextRequest) {
       clearTimeout(timeoutId);
       
       if (fetchError.name === 'AbortError') {
-        console.error('Request timeout:', fetchError);
+        log.error('Ollama request timeout', { timeout: 120000 });
         return NextResponse.json(
           { error: 'Request timeout. The AI model is taking too long to respond. Please try again.' },
           { status: 504 }
@@ -276,7 +284,7 @@ export async function POST(req: NextRequest) {
       throw fetchError;
     }
   } catch (error) {
-    console.error('Chat API error:', error);
+    log.error('Chat API error', error instanceof Error ? error : new Error(String(error)));
     
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     const isConnectionError = errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED');

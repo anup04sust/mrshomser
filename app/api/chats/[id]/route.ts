@@ -3,12 +3,15 @@ import { getDatabase } from '@/app/lib/mongodb';
 import { getCurrentActor, getOwnerQuery } from '@/app/lib/session';
 import { Chat } from '@/app/types/chat';
 import { updateChatRequestSchema } from '@/app/lib/schemas';
+import { createRouteLogger } from '@/app/lib/logger';
 
 // GET /api/chats/[id] - Get a specific chat
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const log = createRouteLogger(req);
+  
   try {
     const { id } = await params;
     const actor = await getCurrentActor(req);
@@ -29,7 +32,7 @@ export async function GET(
 
     return NextResponse.json({ chat });
   } catch (error) {
-    console.error('Error fetching chat:', error);
+    log.error('Error fetching chat', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { error: 'Failed to fetch chat' },
       { status: 500 }
@@ -42,6 +45,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const log = createRouteLogger(req);
+  
   try {
     const { id } = await params;
     const actor = await getCurrentActor(req);
@@ -82,7 +87,7 @@ export async function PUT(
 
     return NextResponse.json({ chat });
   } catch (error) {
-    console.error('Error updating chat:', error);
+    log.error('Error updating chat', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { error: 'Failed to update chat' },
       { status: 500 }
@@ -95,6 +100,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const log = createRouteLogger(req);
+  
   try {
     const { id } = await params;
     const actor = await getCurrentActor(req);
@@ -115,7 +122,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting chat:', error);
+    log.error('Error deleting chat', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { error: 'Failed to delete chat' },
       { status: 500 }

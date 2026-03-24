@@ -5,8 +5,11 @@ import jwt from 'jsonwebtoken';
 import { config } from '@/app/lib/config';
 import { migrateGuestChatsToUser } from '@/app/lib/session';
 import { registerRequestSchema, ValidationError } from '@/app/lib/schemas';
+import { createRouteLogger } from '@/app/lib/logger';
 
 export async function POST(req: NextRequest) {
+  const log = createRouteLogger(req);
+  
   try {
     // Validate request body
     const body = await req.json();
@@ -62,7 +65,7 @@ export async function POST(req: NextRequest) {
       try {
         migratedCount = await migrateGuestChatsToUser(db, guestSession, result.insertedId.toString());
       } catch (migrationError) {
-        console.warn('Failed to migrate guest chats:', migrationError);
+        log.warn('Failed to migrate guest chats', { sessionId: guestSession, error: migrationError });
         // Don't fail registration if migration fails
       }
     }
@@ -88,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Registration error:', error);
+    log.error('Registration error', error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { error: 'Failed to register user' },
       { status: 500 }
